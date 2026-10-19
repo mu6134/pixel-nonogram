@@ -1,0 +1,1317 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>像素數織 Pixel Nonogram</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+:root {
+  --g1: #0f380f;
+  --g2: #306230;
+  --g3: #8bac0f;
+  --g4: #9bbc0f;
+  --err: #c0392b;
+  --px: 'Press Start 2P', 'DotGothic16', monospace;
+  --ui: 'DotGothic16', 'Noto Sans TC', 'Microsoft JhengHei', 'PingFang TC', sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100%; }
+body {
+  background-color: var(--g1);
+  background-image:
+    linear-gradient(rgba(48,98,48,.45) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(48,98,48,.45) 1px, transparent 1px);
+  background-size: 8px 8px;
+  color: var(--g1);
+  font-family: var(--ui);
+  font-size: 15px;
+  line-height: 1.5;
+}
+.shell { max-width: 1240px; margin: 0 auto; padding: 14px; }
+.console {
+  background: var(--g3);
+  border: 4px solid var(--g1);
+  border-radius: 12px 12px 40px 12px;
+  box-shadow: 0 0 0 6px var(--g2), 0 0 0 10px var(--g1);
+  overflow: hidden;
+}
+.topbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 16px; border-bottom: 4px solid var(--g1); background: var(--g2); color: var(--g4);
+}
+.topbar h1 { margin: 0; font-family: var(--px); font-size: 17px; letter-spacing: 1px; font-weight: normal; }
+.topbar h1 small { display: block; font-size: 9px; margin-top: 6px; color: var(--g3); }
+.main { display: flex; gap: 14px; padding: 14px; align-items: flex-start; }
+.play { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.board-area {
+  height: calc(100vh - 205px); min-height: 380px;
+  background: var(--g4); border: 4px solid var(--g1);
+  box-shadow: inset 4px 4px 0 var(--g3);
+  overflow: auto; display: flex; padding: 14px;
+}
+.board-area .board { margin: auto; }
+.toolbar { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.side { width: 255px; flex: none; display: flex; flex-direction: column; gap: 12px; }
+.box { background: var(--g4); border: 3px solid var(--g1); padding: 9px 11px; }
+.box h3 { margin: 0 0 8px; font-size: 14px; font-weight: normal; border-bottom: 2px dashed var(--g2); padding-bottom: 3px; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.stack { display: flex; flex-direction: column; gap: 8px; }
+.btn {
+  font: inherit; font-size: 14px; color: var(--g1); background: var(--g4);
+  border: 3px solid var(--g1); padding: 5px 11px; cursor: pointer;
+  box-shadow: 3px 3px 0 var(--g1); user-select: none;
+}
+.btn:hover { background: var(--g3); }
+.btn:active { transform: translate(3px, 3px); box-shadow: none; }
+.btn:disabled { opacity: .45; cursor: not-allowed; transform: none; box-shadow: 3px 3px 0 var(--g2); background: var(--g4); }
+.btn.on, .btn.primary { background: var(--g1); color: var(--g4); }
+.btn.small { padding: 2px 8px; font-size: 13px; box-shadow: 2px 2px 0 var(--g1); }
+.btn.wide { width: 100%; }
+.seg { display: flex; gap: 6px; }
+.seg .btn { flex: 1; padding: 5px 2px; font-family: var(--px); font-size: 10px; }
+.stat { display: flex; justify-content: space-between; align-items: baseline; margin: 3px 0; }
+.stat b { font-family: var(--px); font-weight: normal; font-size: 13px; }
+.stat b.big { font-size: 19px; }
+.info { margin: 8px 0 0; font-size: 14px; }
+.zoom { display: flex; gap: 6px; align-items: center; }
+.zoom input[type=range] { flex: 1; min-width: 0; accent-color: var(--g1); }
+.zoomval { font-family: var(--px); font-size: 10px; text-align: center; margin-top: 6px; }
+
+/* ---------- 棋盤 ---------- */
+.board {
+  --cell: 24px;
+  display: grid; grid-template-columns: auto auto; grid-template-rows: auto auto;
+  width: max-content; user-select: none; -webkit-user-select: none; padding: 4px;
+}
+.corner { min-width: 4px; }
+.col-clues { display: grid; grid-template-columns: repeat(var(--n), var(--cell)); }
+.row-clues { display: grid; grid-template-rows: repeat(var(--n), var(--cell)); }
+.cc {
+  display: flex; flex-direction: column; justify-content: flex-end; align-items: center;
+  gap: calc(var(--cell) * .14); padding-bottom: calc(var(--cell) * .2);
+  font-size: calc(var(--cell) * .5);
+}
+.rc {
+  display: flex; justify-content: flex-end; align-items: center;
+  gap: calc(var(--cell) * .32); padding: 0 calc(var(--cell) * .3) 0 calc(var(--cell) * .2);
+  font-size: calc(var(--cell) * .5);
+}
+.num { font-family: var(--px); line-height: 1; color: var(--g1); }
+.cc.hl, .rc.hl { background: var(--g3); }
+.grid {
+  display: grid; grid-template-columns: repeat(var(--n), var(--cell)); grid-auto-rows: var(--cell);
+  box-shadow: 0 0 0 2px var(--g1); background: var(--g4);
+}
+.cell {
+  background: var(--g4); border-right: 1px solid var(--g2); border-bottom: 1px solid var(--g2);
+  position: relative; cursor: crosshair;
+}
+.cell.last-c { border-right-width: 0; }
+.cell.last-r { border-bottom-width: 0; }
+.cell.c5 { border-right: 2px solid var(--g1); }
+.cell.r5 { border-bottom: 2px solid var(--g1); }
+.cell.hl { background: var(--g3); }
+.cell.f { background: var(--g1); }
+.cell.x {
+  background-image:
+    linear-gradient(45deg, transparent 44%, var(--g2) 44%, var(--g2) 56%, transparent 56%),
+    linear-gradient(-45deg, transparent 44%, var(--g2) 44%, var(--g2) 56%, transparent 56%);
+  background-size: 62% 62%; background-repeat: no-repeat; background-position: center;
+}
+.cell.err { background: var(--err); }
+.cell.hint { box-shadow: inset 0 0 0 calc(var(--cell) * .14) var(--g3); }
+.board.locked .cell { cursor: default; }
+.board.won .cell.f { animation: pop .5s steps(5) both; animation-delay: var(--d, 0ms); }
+@keyframes pop { 0% { transform: scale(.2); } 60% { transform: scale(1.25); } 100% { transform: scale(1); } }
+
+/* ---------- 彈窗 ---------- */
+.modal {
+  position: fixed; inset: 0; background: rgba(15,56,15,.82); z-index: 50;
+  display: flex; align-items: center; justify-content: center; padding: 16px;
+}
+.modal[hidden] { display: none; }
+.dialog {
+  background: var(--g4); border: 4px solid var(--g1); box-shadow: 0 0 0 4px var(--g2), 8px 8px 0 4px var(--g1);
+  width: min(620px, 100%); max-height: calc(100vh - 32px); display: flex; flex-direction: column;
+}
+.dialog.wide { width: min(1040px, 100%); }
+.dlg-head {
+  display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  background: var(--g1); color: var(--g4); padding: 8px 14px;
+}
+.dlg-head h2 { margin: 0; font-size: 17px; font-weight: normal; }
+.dlg-body { padding: 14px 18px; overflow: auto; }
+.dlg-body h3 { margin: 14px 0 4px; font-size: 15px; font-weight: normal; border-bottom: 2px dashed var(--g2); }
+.dlg-body h3:first-child { margin-top: 0; }
+.dlg-body p, .dlg-body li { margin: 4px 0; }
+.dlg-body ul { padding-left: 22px; margin: 4px 0; }
+.dlg-foot { padding: 10px 18px 16px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+kbd { font-family: var(--px); font-size: 10px; border: 2px solid var(--g1); padding: 1px 4px; background: var(--g3); }
+.example { display: flex; justify-content: center; margin: 10px 0; }
+.example .board { --cell: 26px; }
+
+.win-body { text-align: center; }
+.win-title { font-family: var(--px); font-size: 18px; margin: 4px 0 8px; animation: blink 1s steps(2) 4; }
+@keyframes blink { 50% { opacity: .3; } }
+.pic { display: inline-grid; margin: 10px auto; box-shadow: 0 0 0 3px var(--g1); background: var(--g4); }
+.pic i { display: block; background: var(--g4); }
+.pic i.f { background: var(--g1); animation: pop .5s steps(5) both; animation-delay: var(--d, 0ms); }
+.win-name { font-size: 20px; }
+.win-time { font-family: var(--px); font-size: 14px; margin: 8px 0 2px; }
+.win-best { font-size: 14px; }
+
+/* ---------- 編輯器 ---------- */
+.ed-layout { display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start; }
+.ed-left { flex: 1 1 380px; display: flex; justify-content: center; overflow: auto; }
+.ed-right { flex: 1 1 300px; min-width: 280px; }
+.field { margin-bottom: 10px; }
+.field label { display: block; font-size: 14px; margin-bottom: 3px; }
+.field input[type=text] {
+  width: 100%; font: inherit; padding: 5px 8px; border: 3px solid var(--g1); background: var(--g4); color: var(--g1);
+}
+.field input[type=text]:focus { outline: 3px solid var(--g2); outline-offset: 1px; background: var(--g3); }
+.msg { min-height: 48px; margin: 10px 0; padding: 6px 8px; border: 2px dashed var(--g2); font-size: 14px; }
+.msg.ok { border-style: solid; border-color: var(--g1); }
+.msg.warn { border-style: solid; border-color: var(--err); color: #7a1a10; }
+.list { list-style: none; padding: 0; margin: 6px 0; max-height: 190px; overflow: auto; border: 2px solid var(--g1); }
+.list li { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-bottom: 1px solid var(--g2); }
+.list li:last-child { border-bottom: 0; }
+.list li .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.list li .sz { font-family: var(--px); font-size: 9px; }
+.list li.empty { color: var(--g2); justify-content: center; }
+.list li.cur { background: var(--g3); }
+.help { font-size: 13px; color: var(--g2); margin: 2px 0 8px; }
+
+.toast {
+  position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%); z-index: 99;
+  background: var(--g1); color: var(--g4); padding: 8px 16px; border: 3px solid var(--g4); font-size: 14px;
+  max-width: 90vw; text-align: center;
+}
+.toast[hidden] { display: none; }
+.pcnote { display: none; margin: 8px 14px 0; padding: 6px 10px; border: 2px dashed var(--g1); font-size: 13px; }
+@media (hover: none) { .pcnote { display: block; } }
+@media (max-width: 900px) {
+  .main { flex-direction: column; }
+  .side { width: 100%; }
+  .board-area { height: 70vh; }
+}
+</style>
+</head>
+<body>
+<div class="shell">
+  <div class="console">
+    <header class="topbar">
+      <h1>像素數織<small>PIXEL NONOGRAM</small></h1>
+      <button class="btn small" id="btnRules" title="遊戲規則說明">？ 規則</button>
+    </header>
+    <div class="pcnote">此遊戲需要滑鼠左、右鍵，建議使用電腦遊玩。</div>
+    <div class="main">
+      <section class="play">
+        <div class="board-area" id="boardArea"><div class="board" id="board"></div></div>
+        <div class="toolbar">
+          <button class="btn" id="btnUndo" title="復原 (Ctrl+Z)">↶ 復原</button>
+          <button class="btn" id="btnRedo" title="重做 (Ctrl+Y)">↷ 重做</button>
+          <button class="btn primary" id="btnHint" title="揭示一格">💡 提示 (<span id="hintBtnLeft">3</span>)</button>
+        </div>
+      </section>
+      <aside class="side">
+        <div class="box">
+          <h3>選擇題目</h3>
+          <div class="seg" id="sizeSeg"></div>
+          <p class="info" id="puzzleInfo"></p>
+          <div class="stack">
+            <button class="btn wide" id="btnNew">換新題目</button>
+            <button class="btn wide" id="btnRestart">重新開始</button>
+            <button class="btn wide" id="btnEdit">編輯題目</button>
+          </div>
+        </div>
+        <div class="box">
+          <h3>狀態</h3>
+          <div class="stat"><span>時間</span><b class="big" id="timer">00:00</b></div>
+          <div class="stat"><span>提示剩餘</span><b id="hintLeft">3</b></div>
+          <div class="stat"><span>最佳時間</span><b id="bestTime">--:--</b></div>
+        </div>
+        <div class="box">
+          <h3>畫面縮放</h3>
+          <div class="zoom">
+            <button class="btn small" id="zoomOut" title="縮小">－</button>
+            <input type="range" id="zoomRange" min="50" max="200" step="5" value="100" aria-label="縮放比例">
+            <button class="btn small" id="zoomIn" title="放大">＋</button>
+          </div>
+          <div class="row" style="justify-content:space-between;margin-top:6px">
+            <span class="zoomval" id="zoomVal">100%</span>
+            <button class="btn small" id="zoomReset">重設</button>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+</div>
+
+<!-- 規則說明 -->
+<div class="modal" id="modalRules" hidden role="dialog" aria-modal="true" aria-labelledby="rulesTitle">
+  <div class="dialog">
+    <div class="dlg-head"><h2 id="rulesTitle">遊戲規則</h2><button class="btn small" data-close aria-label="關閉">✕</button></div>
+    <div class="dlg-body">
+      <h3>目標</h3>
+      <p>依照棋盤上方與左側的數字提示，把隱藏的像素圖案填出來。</p>
+      <h3>怎麼看數字提示</h3>
+      <p>每個數字代表一段「連續」的填色格；有多個數字時，段與段之間至少隔一格空白，順序由左到右（或由上到下）。例如「3 1」表示先連續填 3 格，之後（中間留空）再填 1 格。</p>
+      <div class="example" id="ruleExample"></div>
+      <p style="text-align:center;font-size:13px">▲ 範例：這個 5×5 的答案是一棵小樹。</p>
+      <h3>操作方式</h3>
+      <ul>
+        <li><b>左鍵</b>：填色，再點一次取消。</li>
+        <li><b>右鍵</b>：打叉（標記「這格一定是空的」），再點一次取消。</li>
+        <li>按住滑鼠拖曳，可以連續填色或打叉。</li>
+        <li><kbd>Ctrl</kbd>+<kbd>Z</kbd> 復原，<kbd>Ctrl</kbd>+<kbd>Y</kbd> 重做。</li>
+      </ul>
+      <h3>過關、錯誤與提示</h3>
+      <ul>
+        <li>所有行與列都符合數字提示就過關。</li>
+        <li>填錯的格子會立刻變成<b>紅色</b>（以原圖為標準）。</li>
+        <li>每題最多可用 <b>3 次提示</b>，每次會揭示一格正確答案。</li>
+        <li>第一次點擊棋盤後開始計時；每種尺寸各自記錄最佳時間。</li>
+      </ul>
+      <h3>縮放與自製題目</h3>
+      <ul>
+        <li>用右側的「－」「＋」或滑桿縮放畫面，「重設」會回到自動符合視窗大小。</li>
+        <li>按「編輯題目」可以自己畫圖、建立新題目；存檔後會加入題庫，也能匯出或匯入 JSON 備份。</li>
+      </ul>
+    </div>
+    <div class="dlg-foot"><button class="btn primary" data-close>開始玩！</button></div>
+  </div>
+</div>
+
+<!-- 過關 -->
+<div class="modal" id="modalWin" hidden role="dialog" aria-modal="true" aria-labelledby="winTitle">
+  <div class="dialog" style="width:min(460px,100%)">
+    <div class="dlg-head"><h2 id="winTitle">過關！</h2><button class="btn small" data-close aria-label="關閉">✕</button></div>
+    <div class="dlg-body win-body">
+      <div class="win-title">STAGE CLEAR</div>
+      <div id="winPic"></div>
+      <div class="win-name" id="winName"></div>
+      <div class="win-time" id="winTime"></div>
+      <div class="win-best" id="winBest"></div>
+    </div>
+    <div class="dlg-foot">
+      <button class="btn primary" id="winNext">再玩一題</button>
+      <button class="btn" data-close>看看盤面</button>
+    </div>
+  </div>
+</div>
+
+<!-- 題目編輯器 -->
+<div class="modal" id="modalEditor" hidden role="dialog" aria-modal="true" aria-labelledby="edTitle">
+  <div class="dialog wide">
+    <div class="dlg-head"><h2 id="edTitle">題目編輯器</h2><button class="btn small" data-close aria-label="關閉">✕</button></div>
+    <div class="dlg-body ed-layout">
+      <div class="ed-left"><div class="board" id="edBoard"></div></div>
+      <div class="ed-right">
+        <div class="field"><label>尺寸</label><div class="seg" id="edSizes"></div></div>
+        <div class="field">
+          <label for="edName">題目名稱</label>
+          <input type="text" id="edName" maxlength="16" placeholder="例如：小貓">
+        </div>
+        <p class="help">左鍵：填色／取消　右鍵：擦除　可拖曳連續繪製。上方與左側的數字會即時更新。</p>
+        <div class="row" style="margin-bottom:8px">
+          <button class="btn" id="edClear">清空畫布</button>
+          <button class="btn" id="edNew">新題目</button>
+          <button class="btn" id="edTry">試玩</button>
+        </div>
+        <div class="row">
+          <button class="btn" id="edCheck">檢查唯一解</button>
+          <button class="btn primary" id="edSave">存檔</button>
+        </div>
+        <div class="msg" id="edMsg" role="status">畫好圖案、取個名字，就可以存檔加入題庫。</div>
+        <h3 style="margin:0;font-weight:normal;font-size:15px">我的題目（<span id="edCount">0</span>）</h3>
+        <ul class="list" id="edList"></ul>
+        <div class="row">
+          <button class="btn small" id="edExport">匯出 JSON</button>
+          <button class="btn small" id="edImport">匯入 JSON</button>
+          <input type="file" id="importFile" accept=".json,application/json" hidden>
+        </div>
+        <p class="help">自製題目存在這個瀏覽器裡；換電腦或清除瀏覽器資料前，請先「匯出 JSON」備份。</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<script>
+'use strict';
+
+/*SOLVER_START*/
+// 數織求解器：行推理（DP）+ 回溯，回報解的數量（最多數到 limit 個）
+function calcClue(line) {
+  const out = [];
+  let run = 0;
+  for (const v of line) {
+    if (v === 1) run++;
+    else if (run) { out.push(run); run = 0; }
+  }
+  if (run) out.push(run);
+  return out;
+}
+
+// cells: -1 未知 / 0 空 / 1 填色。回傳新的一行，矛盾則回傳 null
+function solveLine(clue, cells) {
+  const n = cells.length, k = clue.length;
+  if (k === 0) {
+    for (let i = 0; i < n; i++) if (cells[i] === 1) return null;
+    return cells.map(() => 0);
+  }
+  // A[j][i]：前 i 格可放下前 j 個區塊（最後區塊結尾 <= i-1）
+  const A = Array.from({ length: k + 1 }, () => new Array(n + 1).fill(false));
+  A[0][0] = true;
+  for (let i = 1; i <= n; i++) A[0][i] = A[0][i - 1] && cells[i - 1] !== 1;
+  for (let j = 1; j <= k; j++) {
+    const L = clue[j - 1];
+    for (let i = 1; i <= n; i++) {
+      let ok = cells[i - 1] !== 1 && A[j][i - 1];
+      if (!ok) {
+        const s = i - L;
+        if (s >= 0) {
+          let fit = true;
+          for (let t = s; t < i; t++) if (cells[t] === 0) { fit = false; break; }
+          if (fit) {
+            if (s === 0) ok = (j === 1);
+            else ok = cells[s - 1] !== 1 && A[j - 1][s - 1];
+          }
+        }
+      }
+      A[j][i] = ok;
+    }
+  }
+  // B[j][i]：第 i 格起可放下第 j 個之後的區塊（第一個區塊起點 >= i）
+  const B = Array.from({ length: k + 1 }, () => new Array(n + 2).fill(false));
+  B[k][n] = true;
+  for (let i = n - 1; i >= 0; i--) B[k][i] = B[k][i + 1] && cells[i] !== 1;
+  for (let j = k - 1; j >= 0; j--) {
+    const L = clue[j];
+    B[j][n] = false;
+    for (let i = n - 1; i >= 0; i--) {
+      let ok = cells[i] !== 1 && B[j][i + 1];
+      if (!ok && i + L <= n) {
+        let fit = true;
+        for (let t = i; t < i + L; t++) if (cells[t] === 0) { fit = false; break; }
+        if (fit) {
+          if (i + L === n) ok = (j + 1 === k);
+          else ok = cells[i + L] !== 1 && B[j + 1][i + L + 1];
+        }
+      }
+      B[j][i] = ok;
+    }
+  }
+  if (!B[0][0]) return null;
+  const canFill = new Array(n).fill(false);
+  const canEmpty = new Array(n).fill(false);
+  for (let j = 0; j < k; j++) {
+    const L = clue[j];
+    for (let s = 0; s + L <= n; s++) {
+      let fit = true;
+      for (let t = s; t < s + L; t++) if (cells[t] === 0) { fit = false; break; }
+      if (!fit) continue;
+      const left = s === 0 ? (j === 0) : (cells[s - 1] !== 1 && A[j][s - 1]);
+      if (!left) continue;
+      const right = s + L === n ? (j + 1 === k) : (cells[s + L] !== 1 && B[j + 1][s + L + 1]);
+      if (!right) continue;
+      for (let t = s; t < s + L; t++) canFill[t] = true;
+    }
+  }
+  for (let c = 0; c < n; c++) {
+    if (cells[c] === 1) continue;
+    for (let j = 0; j <= k; j++) {
+      if (A[j][c] && B[j][c + 1]) { canEmpty[c] = true; break; }
+    }
+  }
+  const out = new Array(n);
+  for (let c = 0; c < n; c++) {
+    if (!canFill[c] && !canEmpty[c]) return null;
+    if (canFill[c] && !canEmpty[c]) out[c] = 1;
+    else if (!canFill[c] && canEmpty[c]) out[c] = 0;
+    else out[c] = -1;
+    if (cells[c] !== -1 && out[c] !== cells[c] && out[c] !== -1) return null;
+    if (cells[c] !== -1) out[c] = cells[c];
+  }
+  return out;
+}
+
+function propagate(rowClues, colClues, grid) {
+  const R = rowClues.length, C = colClues.length;
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (let r = 0; r < R; r++) {
+      const res = solveLine(rowClues[r], grid[r]);
+      if (!res) return false;
+      for (let c = 0; c < C; c++) if (grid[r][c] !== res[c]) { grid[r][c] = res[c]; changed = true; }
+    }
+    for (let c = 0; c < C; c++) {
+      const col = grid.map(row => row[c]);
+      const res = solveLine(colClues[c], col);
+      if (!res) return false;
+      for (let r = 0; r < R; r++) if (grid[r][c] !== res[r]) { grid[r][c] = res[r]; changed = true; }
+    }
+  }
+  return true;
+}
+
+// 回傳 { count, timedOut, solution }，count 最多為 limit
+function countSolutions(rowClues, colClues, limit, timeMs) {
+  limit = limit || 2;
+  const start = Date.now();
+  const R = rowClues.length, C = colClues.length;
+  let count = 0, timedOut = false, firstSolution = null;
+  function rec(grid) {
+    if (count >= limit || timedOut) return;
+    if (timeMs && Date.now() - start > timeMs) { timedOut = true; return; }
+    const g = grid.map(r => r.slice());
+    if (!propagate(rowClues, colClues, g)) return;
+    let pr = -1, pc = -1;
+    outer: for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) if (g[r][c] === -1) { pr = r; pc = c; break outer; }
+    if (pr === -1) {
+      count++;
+      if (!firstSolution) firstSolution = g.map(r => r.slice());
+      return;
+    }
+    for (const v of [1, 0]) {
+      const h = g.map(r => r.slice());
+      h[pr][pc] = v;
+      rec(h);
+      if (count >= limit || timedOut) return;
+    }
+  }
+  rec(Array.from({ length: R }, () => new Array(C).fill(-1)));
+  return { count, timedOut, solution: firstSolution };
+}
+/*SOLVER_END*/
+
+// 內建題庫（每種尺寸 5 題，依難度由易到難排列；皆已驗證為唯一解）
+const BUILTIN = [
+  { s: 5, n: "小樹", g: [
+    "..#..",
+    ".###.",
+    "#####",
+    "..#..",
+    "..#.." ] },
+  { s: 5, n: "小魚", g: [
+    ".....",
+    ".##.#",
+    "#####",
+    ".##.#",
+    "....." ] },
+  { s: 5, n: "愛心", g: [
+    ".#.#.",
+    "#####",
+    "#####",
+    ".###.",
+    "..#.." ] },
+  { s: 5, n: "獎盃", g: [
+    "#####",
+    "#####",
+    ".###.",
+    "..#..",
+    ".###." ] },
+  { s: 5, n: "城堡", g: [
+    "#.#.#",
+    "#####",
+    ".###.",
+    ".###.",
+    ".###." ] },
+  { s: 10, n: "火箭", g: [
+    "....##....",
+    "...####...",
+    "...####...",
+    "..######..",
+    "..##..##..",
+    "..##..##..",
+    "..######..",
+    ".########.",
+    "##.####.##",
+    "#...##...#" ] },
+  { s: 10, n: "蘑菇", g: [
+    "..######..",
+    ".########.",
+    "##..##..##",
+    "##..##..##",
+    "##########",
+    "##########",
+    "...####...",
+    "...####...",
+    "...####...",
+    "..######.." ] },
+  { s: 10, n: "貓咪", g: [
+    "#........#",
+    "##......##",
+    "###....###",
+    "##########",
+    "##.####.##",
+    "##########",
+    "##########",
+    ".###..###.",
+    "..######..",
+    "...####..." ] },
+  { s: 10, n: "皇冠", g: [
+    "..........",
+    "#...##...#",
+    "##..##..##",
+    "###.##.###",
+    "##########",
+    "#.#.##.#.#",
+    "##########",
+    "##########",
+    "..........",
+    ".........." ] },
+  { s: 10, n: "蛋糕", g: [
+    "...#..#...",
+    "...#..#...",
+    "..######..",
+    ".########.",
+    ".#.##.##.#",
+    "##########",
+    "##########",
+    "#.#.#.#.##",
+    "##########",
+    ".########." ] },
+  { s: 15, n: "幽靈", g: [
+    "....#######....",
+    "..###########..",
+    ".#############.",
+    ".#############.",
+    ".##...###...##.",
+    ".##...###...##.",
+    ".##...###...##.",
+    ".#############.",
+    ".#############.",
+    ".#############.",
+    ".#############.",
+    ".#############.",
+    ".#############.",
+    ".####.###.####.",
+    ".###...#...###." ] },
+  { s: 15, n: "骷髏", g: [
+    "....#######....",
+    "..###########..",
+    ".#############.",
+    ".#############.",
+    ".#############.",
+    ".###...#...###.",
+    ".###...#...###.",
+    ".###...#...###.",
+    ".#############.",
+    ".######.######.",
+    "..####...####..",
+    "...#########...",
+    "...#.#.#.#.#...",
+    "...#.#.#.#.#...",
+    "...#########..." ] },
+  { s: 15, n: "城堡", g: [
+    "#.#.#.....#.#.#",
+    "#####.....#####",
+    "#####.#.#.#####",
+    "###############",
+    "##.##.###.##.##",
+    "##.##.###.##.##",
+    "###############",
+    "###############",
+    "#######.#######",
+    "######...######",
+    "######...######",
+    "######...######",
+    "######...######",
+    "######...######",
+    "######...######" ] },
+  { s: 15, n: "帆船", g: [
+    ".......#.......",
+    "......##.......",
+    ".....###.......",
+    "....####.#.....",
+    "...#####.##....",
+    "..######.###...",
+    ".#######.####..",
+    "########.#####.",
+    "########.######",
+    ".......#.......",
+    ".#############.",
+    "..###########..",
+    "...#########...",
+    ".##..##..##..##",
+    "#..##..##..##.." ] },
+  { s: 15, n: "蝴蝶", g: [
+    "..##.......##..",
+    "...#.......#...",
+    "....#.....#....",
+    "..###..#..###..",
+    ".#####.#.#####.",
+    "######.#.######",
+    "###.##.#.##.###",
+    "###.##.#.##.###",
+    "######.#.######",
+    ".#####.#.#####.",
+    "..####.#.####..",
+    ".####..#..####.",
+    ".###...#...###.",
+    "..#....#....#..",
+    ".......#......." ] }
+];
+
+// =====================================================================
+//  工具
+// =====================================================================
+const $ = (s, r) => (r || document).querySelector(s);
+function el(tag, cls, text) {
+  const d = document.createElement(tag);
+  if (cls) d.className = cls;
+  if (text != null) d.textContent = text;
+  return d;
+}
+const store = {
+  get(k, def) { try { const v = localStorage.getItem(k); return v == null ? def : JSON.parse(v); } catch (e) { return def; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } }
+};
+const K_CUSTOM = 'pnono.custom.v1', K_BEST = 'pnono.best.v1', K_ZOOM = 'pnono.zoom.v1',
+      K_RULES = 'pnono.rulesSeen.v1', K_SIZE = 'pnono.size.v1';
+const SIZES = [5, 10, 15];
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const parseGrid = g => g.map(r => [...r].map(ch => (ch === '#' ? 1 : 0)));
+const gridToStrings = grid => grid.map(r => r.map(v => (v ? '#' : '.')).join(''));
+const clueRows = grid => grid.map(calcClue);
+const clueCols = grid => grid[0].map((_, c) => calcClue(grid.map(r => r[c])));
+function fmtTime(ms) {
+  const s = Math.floor(ms / 1000);
+  return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+}
+let toastTimer = null;
+function toast(msg) {
+  const t = $('#toast');
+  t.textContent = msg; t.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.hidden = true; }, 2200);
+}
+// 兩格之間的線段（讓快速拖曳不漏格）
+function lineCells(r0, c0, r1, c1) {
+  const out = [];
+  let dr = Math.abs(r1 - r0), dc = Math.abs(c1 - c0);
+  const sr = r0 < r1 ? 1 : -1, sc = c0 < c1 ? 1 : -1;
+  let err = dc - dr, r = r0, c = c0;
+  for (let i = 0; i < 100; i++) {
+    out.push([r, c]);
+    if (r === r1 && c === c1) break;
+    const e2 = 2 * err;
+    if (e2 > -dr) { err -= dr; c += sc; }
+    if (e2 < dc) { err += dc; r += sr; }
+  }
+  return out;
+}
+
+// =====================================================================
+//  題庫
+// =====================================================================
+function sortedBuiltin() {
+  return BUILTIN.map((raw, i) => ({ raw, i }));
+}
+let customList = (function () {
+  const v = store.get(K_CUSTOM, []);
+  return Array.isArray(v) ? v.filter(validRaw) : [];
+})();
+function validRaw(p) {
+  return p && SIZES.includes(p.s) && typeof p.n === 'string' && Array.isArray(p.g) && p.g.length === p.s &&
+    p.g.every(r => typeof r === 'string' && r.length === p.s && /^[.#]+$/.test(r)) && p.g.some(r => r.includes('#'));
+}
+function toPuzzle(raw, custom, level) {
+  const grid = parseGrid(raw.g);
+  return { id: raw.id, size: raw.s, name: raw.n, grid, custom, level, rows: clueRows(grid), cols: clueCols(grid) };
+}
+function allPuzzles(size) {
+  const out = [];
+  let lv = 0;
+  BUILTIN.forEach((raw, i) => { if (raw.s === size) out.push(toPuzzle({ id: 'b' + i, s: raw.s, n: raw.n, g: raw.g }, false, ++lv)); });
+  customList.forEach(raw => { if (raw.s === size) out.push(toPuzzle(raw, true, 0)); });
+  return out;
+}
+const played = { 5: new Set(), 10: new Set(), 15: new Set() };
+function pickPuzzle(size, excludeId) {
+  const list = allPuzzles(size);
+  let cand = list.filter(p => !played[size].has(p.id) && p.id !== excludeId);
+  if (!cand.length) {
+    played[size] = new Set(excludeId ? [excludeId] : []);
+    cand = list.filter(p => p.id !== excludeId);
+  }
+  if (!cand.length) cand = list;
+  return cand[Math.floor(Math.random() * cand.length)];
+}
+
+// =====================================================================
+//  棋盤 DOM
+// =====================================================================
+function buildBoard(container, n, rows, cols) {
+  container.textContent = '';
+  container.style.setProperty('--n', n);
+  const corner = el('div', 'corner');
+  const ccWrap = el('div', 'col-clues'), rcWrap = el('div', 'row-clues'), grid = el('div', 'grid');
+  const cc = [], rc = [], cells = [];
+  for (let c = 0; c < n; c++) { const d = el('div', 'cc'); ccWrap.appendChild(d); cc.push(d); }
+  for (let r = 0; r < n; r++) { const d = el('div', 'rc'); rcWrap.appendChild(d); rc.push(d); }
+  for (let r = 0; r < n; r++) {
+    cells[r] = [];
+    for (let c = 0; c < n; c++) {
+      const d = el('div', 'cell');
+      d.dataset.r = r; d.dataset.c = c;
+      if (c === n - 1) d.classList.add('last-c'); else if (c % 5 === 4) d.classList.add('c5');
+      if (r === n - 1) d.classList.add('last-r'); else if (r % 5 === 4) d.classList.add('r5');
+      grid.appendChild(d); cells[r][c] = d;
+    }
+  }
+  container.append(corner, ccWrap, rcWrap, grid);
+  const B = { root: container, n, cells, rc, cc, grid, hover: null };
+  B.setClues = function (rows, cols) {
+    rows.forEach((cl, r) => { rc[r].textContent = ''; (cl.length ? cl : [0]).forEach(v => rc[r].appendChild(el('span', 'num', String(v)))); });
+    cols.forEach((cl, c) => { cc[c].textContent = ''; (cl.length ? cl : [0]).forEach(v => cc[c].appendChild(el('span', 'num', String(v)))); });
+  };
+  B.setHover = function (r, c) {
+    if (B.hover) {
+      const [pr, pc] = B.hover;
+      rc[pr].classList.remove('hl'); cc[pc].classList.remove('hl');
+      for (let i = 0; i < n; i++) { cells[pr][i].classList.remove('hl'); cells[i][pc].classList.remove('hl'); }
+      B.hover = null;
+    }
+    if (r != null) {
+      rc[r].classList.add('hl'); cc[c].classList.add('hl');
+      for (let i = 0; i < n; i++) { cells[r][i].classList.add('hl'); cells[i][c].classList.add('hl'); }
+      B.hover = [r, c];
+    }
+  };
+  B.setClues(rows, cols);
+  return B;
+}
+function cellFromEvent(e) {
+  const t = e.target.closest ? e.target.closest('.cell') : null;
+  return t ? [+t.dataset.r, +t.dataset.c] : null;
+}
+
+// =====================================================================
+//  遊戲狀態
+// =====================================================================
+let G = null;   // 目前遊戲
+let B = null;   // 目前棋盤 DOM
+let zoom = clamp(store.get(K_ZOOM, 100) || 100, 50, 200);
+let baseCell = 24;
+let currentSize = SIZES.includes(store.get(K_SIZE, 5)) ? store.get(K_SIZE, 5) : 5;
+const T = { acc: 0, t0: 0, run: false, iv: null };
+
+function timerElapsed() { return T.acc + (T.run ? performance.now() - T.t0 : 0); }
+function showTime() { $('#timer').textContent = fmtTime(timerElapsed()); }
+function timerStart() {
+  if (T.run || !G || G.won) return;
+  T.run = true; T.t0 = performance.now();
+  T.iv = setInterval(showTime, 200);
+}
+function timerStop() {
+  if (!T.run) return;
+  T.acc += performance.now() - T.t0; T.run = false; clearInterval(T.iv);
+}
+function timerReset() { timerStop(); T.acc = 0; showTime(); }
+
+function loadPuzzle(p) {
+  G = {
+    p,
+    state: Array.from({ length: p.size }, () => new Array(p.size).fill(0)),
+    hinted: Array.from({ length: p.size }, () => new Array(p.size).fill(false)),
+    undo: [], redo: [], hints: 3, won: false, stroke: null
+  };
+  if (p.id !== 'tmp') played[p.size].add(p.id);
+  currentSize = p.size;
+  if (p.id !== 'tmp') store.set(K_SIZE, p.size);
+  timerReset();
+  B = buildBoard($('#board'), p.size, p.rows, p.cols);
+  $('#board').classList.remove('locked', 'won');
+  bindBoardEvents();
+  fitBoard();
+  refreshAll();
+  renderSizeSeg();
+  const info = $('#puzzleInfo');
+  if (p.id === 'tmp') info.textContent = '試玩中的自製圖案';
+  else if (p.custom) info.textContent = '自製題目';
+  else info.textContent = '難度：' + '★'.repeat(p.level) + '☆'.repeat(5 - p.level);
+  updateBest();
+}
+function restartGame() {
+  if (!G) return;
+  loadPuzzle(G.p);
+}
+function newPuzzle() {
+  const exclude = G && G.p.id !== 'tmp' && G.p.size === currentSize ? G.p.id : null;
+  loadPuzzle(pickPuzzle(currentSize, exclude));
+}
+
+function paintCell(r, c) {
+  const d = B.cells[r][c], v = G.state[r][c];
+  d.classList.toggle('f', v === 1);
+  d.classList.toggle('x', v === 2);
+  d.classList.toggle('err', v === 1 && !G.p.grid[r][c]);
+  d.classList.toggle('hint', G.hinted[r][c]);
+}
+function refreshAll() {
+  for (let r = 0; r < G.p.size; r++) for (let c = 0; c < G.p.size; c++) paintCell(r, c);
+  updateStatus();
+}
+function updateStatus() {
+  $('#hintLeft').textContent = G.hints;
+  $('#hintBtnLeft').textContent = G.hints;
+  $('#btnUndo').disabled = G.won || !G.undo.length;
+  $('#btnRedo').disabled = G.won || !G.redo.length;
+  $('#btnHint').disabled = G.won || G.hints <= 0;
+}
+function updateBest() {
+  const best = store.get(K_BEST, {});
+  const v = best && best[G ? G.p.size : currentSize];
+  $('#bestTime').textContent = v ? fmtTime(v) : '--:--';
+}
+
+function isSolved() {
+  const n = G.p.size;
+  const filled = G.state.map(row => row.map(v => (v === 1 ? 1 : 0)));
+  for (let r = 0; r < n; r++) if (calcClue(filled[r]).join() !== G.p.rows[r].join()) return false;
+  for (let c = 0; c < n; c++) if (calcClue(filled.map(row => row[c])).join() !== G.p.cols[c].join()) return false;
+  return true;
+}
+function checkWin() {
+  if (G.won || !isSolved()) return;
+  G.won = true;
+  G.stroke = null;
+  const ms = timerElapsed();
+  timerStop();
+  showTime();
+  $('#board').classList.add('locked', 'won');
+  const n = G.p.size;
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) {
+    B.cells[r][c].style.setProperty('--d', (r + c) * 40 + 'ms');
+    if (G.state[r][c] === 2) B.cells[r][c].classList.remove('x');
+  }
+  B.setHover(null);
+  updateStatus();
+  let bestMsg;
+  if (G.p.id === 'tmp') bestMsg = '試玩不會記錄最佳時間。';
+  else {
+    const best = store.get(K_BEST, {}) || {};
+    const prev = best[n];
+    if (!prev || ms < prev) {
+      best[n] = ms; store.set(K_BEST, best);
+      bestMsg = prev ? '新紀錄！（原本 ' + fmtTime(prev) + '）' : '第一次紀錄，最佳時間已建立！';
+    } else bestMsg = '最佳時間：' + fmtTime(prev);
+    updateBest();
+  }
+  setTimeout(() => showWin(ms, bestMsg), 1000);
+}
+function showWin(ms, bestMsg) {
+  const p = G.p, n = p.size;
+  $('#winName').textContent = p.id === 'tmp' ? p.name : '「' + p.name + '」';
+  $('#winTime').textContent = '用時 ' + fmtTime(ms);
+  $('#winBest').textContent = bestMsg;
+  const pic = el('div', 'pic');
+  const px = Math.floor(Math.min(220, n * 22) / n);
+  pic.style.gridTemplateColumns = 'repeat(' + n + ',' + px + 'px)';
+  pic.style.gridAutoRows = px + 'px';
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) {
+    const i = el('i', p.grid[r][c] ? 'f' : '');
+    i.style.setProperty('--d', (r + c) * 45 + 'ms');
+    pic.appendChild(i);
+  }
+  const holder = $('#winPic'); holder.textContent = ''; holder.appendChild(pic);
+  openModal('modalWin');
+}
+
+// ---------------- 操作：繪製 ----------------
+function bindBoardEvents() {
+  const grid = B.grid;
+  grid.addEventListener('contextmenu', e => e.preventDefault());
+  grid.addEventListener('dragstart', e => e.preventDefault());
+  grid.addEventListener('mousedown', e => {
+    if (!G || G.won) return;
+    if (e.button !== 0 && e.button !== 2) return;
+    const pos = cellFromEvent(e); if (!pos) return;
+    e.preventDefault();
+    const [r, c] = pos;
+    timerStart();
+    const orig = G.state[r][c];
+    const v = e.button === 0 ? (orig === 1 ? 0 : 1) : (orig === 2 ? 0 : 2);
+    G.stroke = { v, orig, changes: [], last: [r, c] };
+    strokeApply(r, c, true);
+  });
+  grid.addEventListener('mouseover', e => {
+    const pos = cellFromEvent(e); if (!pos) return;
+    if (!G.won) B.setHover(pos[0], pos[1]);
+    if (G.stroke && !G.won) {
+      const [lr, lc] = G.stroke.last;
+      lineCells(lr, lc, pos[0], pos[1]).forEach(([r, c]) => strokeApply(r, c, false));
+      G.stroke.last = pos;
+    }
+  });
+  grid.addEventListener('mouseleave', () => B.setHover(null));
+}
+function strokeApply(r, c, first) {
+  const s = G.stroke; if (!s) return;
+  if (G.hinted[r][c]) return;
+  const cur = G.state[r][c];
+  if (!first) {
+    if (s.v === 0) { if (cur !== s.orig) return; }
+    else if (cur !== 0) return;
+  }
+  if (cur === s.v) return;
+  s.changes.push({ r, c, prev: cur, next: s.v, ph: false, nh: false });
+  G.state[r][c] = s.v;
+  paintCell(r, c);
+}
+window.addEventListener('mouseup', () => {
+  if (!G || !G.stroke) return;
+  const s = G.stroke; G.stroke = null;
+  if (s.changes.length) {
+    G.undo.push({ changes: s.changes, hint: false });
+    G.redo = [];
+    updateStatus();
+    checkWin();
+  }
+});
+
+// ---------------- 復原 / 重做 / 提示 ----------------
+function applyEntry(entry, undo) {
+  const list = undo ? entry.changes.slice().reverse() : entry.changes;
+  list.forEach(ch => {
+    G.state[ch.r][ch.c] = undo ? ch.prev : ch.next;
+    G.hinted[ch.r][ch.c] = undo ? ch.ph : ch.nh;
+    paintCell(ch.r, ch.c);
+  });
+  if (entry.hint) G.hints += undo ? 1 : -1;
+}
+function doUndo() {
+  if (!G || G.won || !G.undo.length) return;
+  const e = G.undo.pop(); applyEntry(e, true); G.redo.push(e);
+  updateStatus(); checkWin();
+}
+function doRedo() {
+  if (!G || G.won || !G.redo.length) return;
+  const e = G.redo.pop(); applyEntry(e, false); G.undo.push(e);
+  updateStatus(); checkWin();
+}
+function useHint() {
+  if (!G || G.won) return;
+  if (G.hints <= 0) { toast('這題的提示已經用完了'); return; }
+  const n = G.p.size, cand = [];
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) {
+    const sol = G.p.grid[r][c], v = G.state[r][c];
+    if (G.hinted[r][c]) continue;
+    if ((sol && v !== 1) || (!sol && v === 1)) cand.push([r, c]);
+  }
+  if (!cand.length) { toast('目前沒有需要提示的格子'); return; }
+  const wrong = cand.filter(([r, c]) => G.state[r][c] === 1);   // 優先糾正填錯的格子
+  const pool = wrong.length ? wrong : cand;
+  const [r, c] = pool[Math.floor(Math.random() * pool.length)];
+  timerStart();
+  const next = G.p.grid[r][c] ? 1 : 2;
+  const ch = { r, c, prev: G.state[r][c], next, ph: G.hinted[r][c], nh: true };
+  G.state[r][c] = next; G.hinted[r][c] = true; paintCell(r, c);
+  G.hints--; G.undo.push({ changes: [ch], hint: true }); G.redo = [];
+  updateStatus(); checkWin();
+}
+
+// =====================================================================
+//  縮放與自動符合視窗
+// =====================================================================
+function fitBoard() {
+  const root = $('#board'), area = $('#boardArea');
+  let c = 24;
+  root.style.setProperty('--cell', c + 'px');
+  const w0 = root.offsetWidth, h0 = root.offsetHeight;
+  if (w0 > 0 && h0 > 0) {
+    const availW = area.clientWidth - 30, availH = area.clientHeight - 30;
+    c = clamp(Math.floor(24 * Math.min(availW / w0, availH / h0)), 14, 44);
+    root.style.setProperty('--cell', c + 'px');
+    let guard = 0;
+    while ((root.offsetWidth > availW || root.offsetHeight > availH) && c > 14 && guard++ < 30) {
+      c--; root.style.setProperty('--cell', c + 'px');
+    }
+  }
+  baseCell = c;
+  applyZoom(false);
+}
+function applyZoom(save) {
+  const cell = Math.max(8, Math.round(baseCell * zoom / 100));
+  $('#board').style.setProperty('--cell', cell + 'px');
+  $('#zoomRange').value = zoom;
+  $('#zoomVal').textContent = zoom + '%';
+  if (save) store.set(K_ZOOM, zoom);
+}
+function setZoom(z) { zoom = clamp(Math.round(z / 5) * 5, 50, 200); applyZoom(true); }
+let resizeTimer = null;
+window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { if (G) fitBoard(); }, 120); });
+
+// =====================================================================
+//  彈窗
+// =====================================================================
+const modalStack = [];
+function openModal(id) {
+  const m = $('#' + id);
+  m.hidden = false;
+  if (!modalStack.includes(id)) modalStack.push(id);
+  const f = m.querySelector('.btn.primary, .btn');
+  if (f) f.focus({ preventScroll: true });
+}
+function closeModal(id) {
+  const m = $('#' + id);
+  m.hidden = true;
+  const i = modalStack.indexOf(id); if (i >= 0) modalStack.splice(i, 1);
+  if (id === 'modalRules') store.set(K_RULES, true);
+}
+document.querySelectorAll('.modal').forEach(m => {
+  m.addEventListener('mousedown', e => { if (e.target === m && m.id !== 'modalEditor') closeModal(m.id); });
+  m.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => closeModal(m.id)));
+});
+function buildRuleExample() {
+  const raw = BUILTIN.find(p => p.n === '小樹') || BUILTIN[0];
+  const grid = parseGrid(raw.g);
+  const b = buildBoard($('#ruleExample'), grid.length, clueRows(grid), clueCols(grid));
+  grid.forEach((row, r) => row.forEach((v, c) => { if (v) b.cells[r][c].classList.add('f'); }));
+}
+
+// =====================================================================
+//  題目編輯器
+// =====================================================================
+const ED = { n: 5, grid: null, id: null, B: null, stroke: null, dirty: false };
+const ED_CELL = { 5: 36, 10: 28, 15: 22 };
+function edBlank(n) { return Array.from({ length: n }, () => new Array(n).fill(0)); }
+function edMsg(text, kind) { const m = $('#edMsg'); m.textContent = text; m.className = 'msg' + (kind ? ' ' + kind : ''); }
+function edRender() {
+  const n = ED.n;
+  ED.B = buildBoard($('#edBoard'), n, clueRows(ED.grid), clueCols(ED.grid));
+  $('#edBoard').style.setProperty('--cell', ED_CELL[n] + 'px');
+  edPaintAll();
+  const g = ED.B.grid;
+  g.addEventListener('contextmenu', e => e.preventDefault());
+  g.addEventListener('dragstart', e => e.preventDefault());
+  g.addEventListener('mousedown', e => {
+    if (e.button !== 0 && e.button !== 2) return;
+    const pos = cellFromEvent(e); if (!pos) return;
+    e.preventDefault();
+    const v = e.button === 0 ? (ED.grid[pos[0]][pos[1]] ? 0 : 1) : 0;
+    ED.stroke = { v, last: pos };
+    edSet(pos[0], pos[1], v);
+  });
+  g.addEventListener('mouseover', e => {
+    const pos = cellFromEvent(e); if (!pos) return;
+    ED.B.setHover(pos[0], pos[1]);
+    if (ED.stroke) {
+      lineCells(ED.stroke.last[0], ED.stroke.last[1], pos[0], pos[1]).forEach(([r, c]) => edSet(r, c, ED.stroke.v));
+      ED.stroke.last = pos;
+    }
+  });
+  g.addEventListener('mouseleave', () => ED.B.setHover(null));
+}
+function edPaintAll() {
+  for (let r = 0; r < ED.n; r++) for (let c = 0; c < ED.n; c++) ED.B.cells[r][c].classList.toggle('f', !!ED.grid[r][c]);
+}
+function edSet(r, c, v) {
+  if (ED.grid[r][c] === v) return;
+  ED.grid[r][c] = v; ED.dirty = true;
+  ED.B.cells[r][c].classList.toggle('f', !!v);
+  ED.B.setClues(clueRows(ED.grid), clueCols(ED.grid));
+}
+window.addEventListener('mouseup', () => { ED.stroke = null; });
+function edHasFill() { return ED.grid.some(r => r.some(v => v)); }
+function edSizes() {
+  const seg = $('#edSizes'); seg.textContent = '';
+  SIZES.forEach(n => {
+    const b = el('button', 'btn' + (n === ED.n ? ' on' : ''), n + '×' + n);
+    b.addEventListener('click', () => {
+      if (n === ED.n) return;
+      if (edHasFill() && !confirm('切換尺寸會清空目前的畫布，要繼續嗎？')) return;
+      ED.n = n; ED.grid = edBlank(n); ED.id = null; ED.dirty = false;
+      edSizes(); edRender(); edList(); edMsg('已切換為 ' + n + '×' + n + '。');
+    });
+    seg.appendChild(b);
+  });
+}
+function edList() {
+  const ul = $('#edList'); ul.textContent = '';
+  $('#edCount').textContent = customList.length;
+  if (!customList.length) { ul.appendChild(el('li', 'empty', '還沒有自製題目')); return; }
+  customList.forEach(p => {
+    const li = el('li', ED.id === p.id ? 'cur' : '');
+    li.appendChild(el('span', 'sz', p.s + '×' + p.s));
+    li.appendChild(el('span', 'nm', p.n));
+    const play = el('button', 'btn small', '玩');
+    play.addEventListener('click', () => { closeModal('modalEditor'); loadPuzzle(toPuzzle(p, true, 0)); toast('開始遊玩「' + p.n + '」'); });
+    const edit = el('button', 'btn small', '改');
+    edit.addEventListener('click', () => {
+      if (ED.dirty && edHasFill() && !confirm('目前的畫布尚未存檔，要放棄並載入這題嗎？')) return;
+      ED.n = p.s; ED.grid = parseGrid(p.g); ED.id = p.id; ED.dirty = false;
+      $('#edName').value = p.n; edSizes(); edRender(); edList(); edMsg('正在編輯「' + p.n + '」，修改後按「存檔」會覆蓋原題目。');
+    });
+    const del = el('button', 'btn small', '刪');
+    del.addEventListener('click', () => {
+      if (!confirm('確定要刪除「' + p.n + '」嗎？此動作無法復原。')) return;
+      customList = customList.filter(x => x.id !== p.id);
+      store.set(K_CUSTOM, customList);
+      if (ED.id === p.id) ED.id = null;
+      edList(); edMsg('已刪除「' + p.n + '」。');
+    });
+    li.append(play, edit, del);
+    ul.appendChild(li);
+  });
+}
+function edCheckUnique(report) {
+  if (!edHasFill()) { edMsg('請先在畫布上畫一些格子。', 'warn'); return null; }
+  edMsg('檢查中…');
+  const res = countSolutions(clueRows(ED.grid), clueCols(ED.grid), 2, ED.n >= 15 ? 4000 : 2500);
+  if (report) {
+    if (res.timedOut) edMsg('無法判定：檢查時間太長（仍可存檔）。', 'warn');
+    else if (res.count === 1) edMsg('✔ 唯一解：這題不用猜測就能解開。', 'ok');
+    else edMsg('⚠ 此題有多種解法，可能需要猜測（仍可存檔）。', 'warn');
+  }
+  return res;
+}
+function edSave() {
+  const name = $('#edName').value.trim().slice(0, 16);
+  if (!name) { edMsg('請先替題目取個名字。', 'warn'); $('#edName').focus(); return; }
+  if (!edHasFill()) { edMsg('至少要填一格才能存檔。', 'warn'); return; }
+  const g = gridToStrings(ED.grid);
+  const dup = BUILTIN.some(p => p.s === ED.n && p.g.join() === g.join()) ||
+              customList.some(p => p.s === ED.n && p.g.join() === g.join() && p.id !== ED.id);
+  if (dup) { edMsg('題庫裡已經有相同圖案的題目了。', 'warn'); return; }
+  const res = edCheckUnique(false);
+  let note;
+  if (res.timedOut) note = '（唯一解檢查逾時，無法判定）';
+  else if (res.count === 1) note = '（✔ 唯一解）';
+  else note = '（⚠ 此題有多種解法，可能需要猜測）';
+  if (ED.id) {
+    const i = customList.findIndex(p => p.id === ED.id);
+    if (i >= 0) customList[i] = { id: ED.id, s: ED.n, n: name, g };
+    else { ED.id = null; }
+  }
+  if (!ED.id) {
+    ED.id = 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    customList.push({ id: ED.id, s: ED.n, n: name, g });
+  }
+  const ok = store.set(K_CUSTOM, customList);
+  ED.dirty = false;
+  edList();
+  edMsg((ok ? '已存檔並加入題庫：「' + name + '」' : '存檔失敗：瀏覽器不允許儲存資料。') + note, res.count === 1 && !res.timedOut ? 'ok' : 'warn');
+}
+function edTry() {
+  if (!edHasFill()) { edMsg('請先在畫布上畫一些格子。', 'warn'); return; }
+  const name = $('#edName').value.trim().slice(0, 16) || '未命名';
+  const grid = ED.grid.map(r => r.slice());
+  const p = { id: 'tmp', size: ED.n, name, grid, custom: true, level: 0, rows: clueRows(grid), cols: clueCols(grid) };
+  closeModal('modalEditor');
+  loadPuzzle(p);
+  toast('試玩中：過關後可以再回到編輯器繼續修改');
+}
+function edExport() {
+  if (!customList.length) { edMsg('還沒有自製題目可以匯出。', 'warn'); return; }
+  const data = { app: 'pixel-nonogram', version: 1, puzzles: customList.map(p => ({ name: p.n, size: p.s, grid: p.g })) };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'pixel-nonogram-puzzles.json';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  edMsg('已匯出 ' + customList.length + ' 題。', 'ok');
+}
+function edImportText(text) {
+  let data;
+  try { data = JSON.parse(text); } catch (e) { edMsg('匯入失敗：不是有效的 JSON 檔案。', 'warn'); return; }
+  const arr = Array.isArray(data) ? data : (data && Array.isArray(data.puzzles) ? data.puzzles : null);
+  if (!arr) { edMsg('匯入失敗：找不到題目資料。', 'warn'); return; }
+  let added = 0, skipped = 0;
+  arr.forEach(item => {
+    const raw = { s: item && item.size, n: item && typeof item.name === 'string' ? item.name.trim().slice(0, 16) : '', g: item && item.grid };
+    if (!raw.n || !validRaw(raw)) { skipped++; return; }
+    const key = raw.g.join();
+    const dup = BUILTIN.some(p => p.s === raw.s && p.g.join() === key) || customList.some(p => p.s === raw.s && p.g.join() === key);
+    if (dup) { skipped++; return; }
+    customList.push({ id: 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), s: raw.s, n: raw.n, g: raw.g });
+    added++;
+  });
+  store.set(K_CUSTOM, customList);
+  edList();
+  edMsg('匯入完成：新增 ' + added + ' 題，略過 ' + skipped + ' 題（重複或格式不符）。', added ? 'ok' : 'warn');
+}
+function openEditor() {
+  if (!ED.grid) { ED.n = currentSize; ED.grid = edBlank(ED.n); ED.id = null; }
+  edSizes(); edRender(); edList();
+  openModal('modalEditor');
+  $('#edName').focus();
+}
+
+// =====================================================================
+//  介面
+// =====================================================================
+function renderSizeSeg() {
+  const seg = $('#sizeSeg'); seg.textContent = '';
+  SIZES.forEach(n => {
+    const b = el('button', 'btn' + (n === currentSize ? ' on' : ''), n + '×' + n);
+    b.addEventListener('click', () => {
+      if (n === currentSize && G && G.p.id !== 'tmp') return;
+      currentSize = n; loadPuzzle(pickPuzzle(n, null));
+    });
+    seg.appendChild(b);
+  });
+}
+$('#btnRules').addEventListener('click', () => openModal('modalRules'));
+$('#btnNew').addEventListener('click', newPuzzle);
+$('#btnRestart').addEventListener('click', restartGame);
+$('#btnEdit').addEventListener('click', openEditor);
+$('#btnUndo').addEventListener('click', doUndo);
+$('#btnRedo').addEventListener('click', doRedo);
+$('#btnHint').addEventListener('click', useHint);
+$('#winNext').addEventListener('click', () => { closeModal('modalWin'); newPuzzle(); });
+$('#zoomIn').addEventListener('click', () => setZoom(zoom + 10));
+$('#zoomOut').addEventListener('click', () => setZoom(zoom - 10));
+$('#zoomReset').addEventListener('click', () => { zoom = 100; fitBoard(); store.set(K_ZOOM, zoom); });
+$('#zoomRange').addEventListener('input', e => setZoom(+e.target.value));
+$('#edClear').addEventListener('click', () => {
+  if (edHasFill() && !confirm('要清空整張畫布嗎？')) return;
+  ED.grid = edBlank(ED.n); ED.dirty = false; edRender(); edMsg('已清空畫布。');
+});
+$('#edNew').addEventListener('click', () => {
+  if (ED.dirty && edHasFill() && !confirm('目前的畫布尚未存檔，要放棄嗎？')) return;
+  ED.grid = edBlank(ED.n); ED.id = null; ED.dirty = false; $('#edName').value = '';
+  edRender(); edList(); edMsg('已開始一個新題目。');
+});
+$('#edTry').addEventListener('click', edTry);
+$('#edCheck').addEventListener('click', () => edCheckUnique(true));
+$('#edSave').addEventListener('click', edSave);
+$('#edExport').addEventListener('click', edExport);
+$('#edImport').addEventListener('click', () => $('#importFile').click());
+$('#importFile').addEventListener('change', e => {
+  const f = e.target.files && e.target.files[0];
+  if (!f) return;
+  if (f.size > 2 * 1024 * 1024) { edMsg('匯入失敗：檔案太大。', 'warn'); e.target.value = ''; return; }
+  const rd = new FileReader();
+  rd.onload = () => edImportText(String(rd.result));
+  rd.onerror = () => edMsg('匯入失敗：無法讀取檔案。', 'warn');
+  rd.readAsText(f);
+  e.target.value = '';
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && modalStack.length) { closeModal(modalStack[modalStack.length - 1]); return; }
+  if (modalStack.length) return;
+  const tag = (e.target && e.target.tagName) || '';
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+  if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z') { e.preventDefault(); doUndo(); }
+  else if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'y' || (e.shiftKey && e.key.toLowerCase() === 'z'))) { e.preventDefault(); doRedo(); }
+});
+
+// 啟動
+buildRuleExample();
+renderSizeSeg();
+loadPuzzle(pickPuzzle(currentSize, null));
+if (!store.get(K_RULES, false)) openModal('modalRules');
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (G) fitBoard(); });
+</script>
+</body>
+</html>
